@@ -30,3 +30,49 @@ async def save_log(request: Request):
         print("❌ Error:", str(e))
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
+from fastapi import Query
+from io import BytesIO
+import matplotlib.pyplot as plt
+import pandas as pd
+from datetime import datetime, timedelta
+
+@app.get("/generate-graph")
+def generate_graph(days: int = Query(default=7, description="何日分のデータをグラフにするか")):
+    try:
+        since = (datetime.now() - timedelta(days=days)).date().isoformat()
+        res = supabase.table("diet_logs").select("*").gte("date", since).order("date").execute()
+        logs = res.data
+
+        if not logs or len(logs) < 2:
+            return {"status": "error", "message": "グラフを作るにはデータが少なすぎます"}
+
+        df = pd.DataFrame(logs)
+        df["date"] = pd.to_datetime(df["date"])
+        df.set_index("date", inplace=True)
+
+        plt.figure(figsize=(8, 4))
+        plt.plot(df.index, df["weight"], marker="o", label="体重(kg)")
+        if "body_fat" in df.columns and df["body_fat"].notnull().any():
+            plt.plot(df.index, df["body_fat"], marker="s", label="体脂肪(%)")
+        plt.xlabel("日付")
+        plt.ylabel("数値")
+        plt.title("体重と体脂肪の推移")
+        plt.legend()
+        plt.grid(True)
+
+        buf = BytesIO()
+        plt.tight_layout()
+        plt.savefig(buf, format="png")
+        buf.seek(0)
+
+        today = datetime.now().strftime("%Y-%m-%d-%H%M")
+        file_name = f"chart-{today}.png"
+        supabase.storage.from_("charts").upload(file_name, buf, {"content-type": "image/png"})
+
+        url = f"{SUPABASE_URL}/storage/v1/object/public/charts/{file_name}"
+        return {"status": "ok", "url": url}
+
+    except Exception as e:
+        print("❌ Error in /generate-graph:", str(e))
+        return {"status": "error", "message": str(e)}
+
