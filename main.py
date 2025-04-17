@@ -36,6 +36,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from datetime import datetime, timedelta
 
+# generate graph
 @app.get("/generate-graph")
 def generate_graph(days: int = Query(default=7, description="何日分のデータをグラフにするか")):
     try:
@@ -67,7 +68,7 @@ def generate_graph(days: int = Query(default=7, description="何日分のデー�
 
         today = datetime.now().strftime("%Y-%m-%d-%H%M")
         file_name = f"chart-{today}.png"
-        supabase.storage.from_("charts").upload(file_name, buf, {"content-type": "image/png"})
+        supabase.storage.from_("charts").upload(file_name, buf.read(), {"content-type": "image/png"})
 
         url = f"{SUPABASE_URL}/storage/v1/object/public/charts/{file_name}"
         return {"status": "ok", "url": url}
